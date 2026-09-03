@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { Component, lazy, Suspense, type ReactNode } from 'react'
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { MotionConfig } from 'framer-motion'
 import { ToastProvider } from '@/components/ui'
 import { AuthProvider } from '@/features/auth/AuthProvider'
@@ -20,12 +20,45 @@ const PaginaMetas = lazy(() => import('@/features/metas/PaginaMetas').then((m) =
 const PaginaMais = lazy(() => import('@/features/admin/PaginaMais').then((m) => ({ default: m.PaginaMais })))
 const PaginaAdmin = lazy(() => import('@/features/admin/PaginaAdmin').then((m) => ({ default: m.PaginaAdmin })))
 
+const DEMO = import.meta.env.VITE_DEMO === '1'
+
+class LimiteErro extends Component<{ children: ReactNode }, { erro: Error | null }> {
+  state = { erro: null as Error | null }
+  static getDerivedStateFromError(erro: Error) {
+    return { erro }
+  }
+  componentDidCatch(erro: Error) {
+    console.error(erro)
+  }
+  render() {
+    if (!this.state.erro) return this.props.children
+    return (
+      <div className="min-h-dvh flex items-center justify-center px-6">
+        <div className="vidro-2 rounded-xl p-6 max-w-md text-center">
+          <h1 className="text-lg font-semibold text-platina">Algo deu errado nesta tela</h1>
+          <p className="mt-1 text-sm text-prata-2">Recarregue a página. Se continuar, avise o administrador.</p>
+          <button onClick={() => window.location.reload()} className="mt-4 h-11 rounded-sm bg-white/[0.08] px-4 text-sm font-semibold text-platina cursor-pointer">
+            Recarregar
+          </button>
+        </div>
+      </div>
+    )
+  }
+}
+
 export function App() {
+  const Roteador = DEMO ? HashRouter : BrowserRouter
   return (
     <MotionConfig reducedMotion="user">
+      <LimiteErro>
       <ToastProvider>
         <AuthProvider>
-          <BrowserRouter>
+          {DEMO && (
+            <div className="bg-atrasado/15 border-b border-atrasado/30 px-4 py-1.5 text-center text-[12px] text-[#f0c27a]">
+              Versão de demonstração. Os dados ficam só neste navegador e podem ser apagados a qualquer momento.
+            </div>
+          )}
+          <Roteador>
             <Suspense fallback={<TelaCarregando />}>
               <Routes>
                 <Route path="/entrar" element={<PaginaLogin />} />
@@ -51,9 +84,10 @@ export function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
-          </BrowserRouter>
+          </Roteador>
         </AuthProvider>
       </ToastProvider>
+      </LimiteErro>
     </MotionConfig>
   )
 }

@@ -45,7 +45,7 @@ export function deDoc<T>(snap: QueryDocumentSnapshot<DocumentData> | { id: strin
   const dados = snap.data() ?? {}
   const saida: Record<string, unknown> = { id: snap.id }
   for (const [k, v] of Object.entries(dados)) {
-    saida[k] = v instanceof Timestamp ? v.toDate().toISOString() : v
+    saida[k] = v instanceof Timestamp ? v.toDate().toISOString() : v instanceof Date ? v.toISOString() : v
   }
   return saida as T
 }

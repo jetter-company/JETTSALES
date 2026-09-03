@@ -8,24 +8,41 @@ import { fileURLToPath } from 'node:url'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const geminiKey = env.VITE_GEMINI_API_KEY ?? env.GEMINI_API_KEY ?? env.API_KEY ?? ''
+  // `vite build --mode demo`: versão de demonstração sem Firebase, com dados no navegador,
+  // em arquivo único (scripts/inline-unico.mjs).
+  const demo = mode === 'demo'
+  const src = (p: string) => fileURLToPath(new URL(p, import.meta.url))
+  const alias: Record<string, string> = demo
+    ? {
+        '@': src('./src'),
+        'firebase/app': src('./src/lib/mock/app.ts'),
+        'firebase/auth': src('./src/lib/mock/auth.ts'),
+        'firebase/firestore': src('./src/lib/mock/firestore.ts'),
+      }
+    : { '@': src('./src') }
   return {
     plugins: [react(), tailwindcss()],
-    resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+    resolve: { alias },
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(geminiKey),
       'process.env.API_KEY': JSON.stringify(geminiKey),
+      'import.meta.env.VITE_DEMO': JSON.stringify(demo ? '1' : ''),
     },
     build: {
       target: 'es2022',
       chunkSizeWarningLimit: 1200,
+      modulePreload: !demo,
+      assetsInlineLimit: demo ? 1e9 : 4096,
       rollupOptions: {
-        output: {
-          manualChunks: {
-            firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-            charts: ['recharts'],
-            motion: ['framer-motion'],
-          },
-        },
+        output: demo
+          ? { inlineDynamicImports: true }
+          : {
+              manualChunks: {
+                firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+                charts: ['recharts'],
+                motion: ['framer-motion'],
+              },
+            },
       },
     },
   }

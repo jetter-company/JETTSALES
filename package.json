@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "emuladores": "firebase emulators:start --only auth,firestore",
-    "dev:emuladores": "VITE_USE_EMULATORS=1 vite"
+    "dev:emuladores": "VITE_USE_EMULATORS=1 vite",
+    "build:demo": "vite build --mode demo && node scripts/inline-unico.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.52.0",

@@ -12,6 +12,12 @@ import {
 import { collection, doc, getDoc, getDocs, onSnapshot, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { auth, db, deDoc, googleProvider, normalizarEmail } from '@/lib/firebase'
 import { COMISSAO_PADRAO, GERAL_PADRAO, LISTAS_PADRAO, type ConfigComissao, type ConfigGeral, type ConfigListas, type Convite, type Usuario } from '@/lib/tipos'
+import { carregarDadosExemplo } from '@/features/admin/dadosExemplo'
+
+const DEMO = import.meta.env.VITE_DEMO === '1'
+
+// Nome informado no cadastro por e-mail: onAuthStateChanged dispara antes do updateProfile.
+let nomePendente = ''
 
 export type EstadoAuth = 'carregando' | 'deslogado' | 'sem_acesso' | 'ok'
 
@@ -71,7 +77,7 @@ async function resolverUsuario(u: User): Promise<{ usuario: Usuario | null; moti
     return { usuario, motivo: null }
   }
   const email = normalizarEmail(u.email ?? '')
-  const nome = u.displayName?.trim() || email.split('@')[0] || 'Usuário'
+  const nome = u.displayName?.trim() || nomePendente.trim() || email.split('@')[0] || 'Usuário'
 
   const sistema = await getDoc(doc(db, 'configuracoes', 'sistema'))
   if (!sistema.exists()) {
@@ -95,7 +101,10 @@ async function resolverUsuario(u: User): Promise<{ usuario: Usuario | null; moti
     try {
       await lote.commit()
       const criado = await getDoc(ref)
-      return { usuario: deDoc<Usuario>(criado), motivo: null }
+      const usuario = deDoc<Usuario>(criado)
+      // Na demonstração, o primeiro acesso já vem com dados de exemplo para mostrar o app.
+      if (DEMO) await carregarDadosExemplo([usuario], LISTAS_PADRAO.servicos).catch(() => undefined)
+      return { usuario, motivo: null }
     } catch {
       // Outro usuário concluiu o bootstrap ao mesmo tempo; segue para o convite.
     }
@@ -208,6 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await signInWithEmailAndPassword(auth, normalizarEmail(email), senha)
       },
       criarContaComEmail: async (nome, email, senha) => {
+        nomePendente = nome
         const cred = await createUserWithEmailAndPassword(auth, normalizarEmail(email), senha)
         if (nome.trim()) await updateProfile(cred.user, { displayName: nome.trim() })
       },
