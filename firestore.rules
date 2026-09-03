@@ -1,0 +1,230 @@
+rules_version = '2';
+
+// Regras de segurança do Cockpit PA.
+// Princípio: negar tudo por padrão.
+//   - vendedor: lê e escreve só documentos com vendedorId == uid;
+//   - gestor: lê tudo, reatribui leads, edita metas; não altera comissão nem papéis;
+//   - admin: lê e escreve tudo (configuracoes, convites, usuarios).
+// Datas de negócio são strings ISO; criadoEm/atualizadoEm são timestamps.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------ helpers
+    function autenticado() {
+      return request.auth != null;
+    }
+    function uid() {
+      return request.auth.uid;
+    }
+    function emailDoToken() {
+      return request.auth.token.email != null ? request.auth.token.email.lower() : '';
+    }
+    function docUsuario() {
+      return get(/databases/$(database)/documents/usuarios/$(uid()));
+    }
+    function temUsuario() {
+      return exists(/databases/$(database)/documents/usuarios/$(uid()));
+    }
+    function papel() {
+      return temUsuario() ? docUsuario().data.papel : '';
+    }
+    function ativo() {
+      return temUsuario() && docUsuario().data.ativo == true;
+    }
+    function ehAdmin() {
+      return autenticado() && ativo() && papel() == 'admin';
+    }
+    function ehGestor() {
+      return autenticado() && ativo() && papel() == 'gestor';
+    }
+    function ehGestao() {
+      return ehAdmin() || ehGestor();
+    }
+    function ehMembro() {
+      return autenticado() && ativo();
+    }
+    function bootstrapPendente() {
+      return !exists(/databases/$(database)/documents/configuracoes/sistema);
+    }
+    function isoData(v) {
+      return v is string && v.size() >= 10 && v.size() <= 40;
+    }
+    function papelValido(p) {
+      return p in ['admin', 'gestor', 'vendedor'];
+    }
+    function faixaValida(f) {
+      return f in ['Inicial', 'Pleno', 'Sênior'];
+    }
+    function donoDoRecurso() {
+      return resource.data.vendedorId == uid();
+    }
+    function donoDoNovo() {
+      return request.resource.data.vendedorId == uid();
+    }
+    function mantemVendedor() {
+      return request.resource.data.vendedorId == resource.data.vendedorId;
+    }
+
+    // ------------------------------------------------------------ usuarios
+    match /usuarios/{userId} {
+      // Todos os membros leem a lista da equipe (nomes, papéis, metas). Sem dados sensíveis.
+      allow read: if ehMembro() || (autenticado() && userId == uid());
+
+      // Criação do próprio documento:
+      //  a) bootstrap: primeiro usuário vira admin enquanto configuracoes/sistema não existe;
+      //  b) convite: papel/faixa/meta vêm do convite do próprio e-mail.
+      allow create: if autenticado() && userId == uid()
+        && request.resource.data.email == emailDoToken()
+        && request.resource.data.nome is string
+        && papelValido(request.resource.data.papel)
+        && faixaValida(request.resource.data.faixa)
+        && request.resource.data.ativo == true
+        && request.resource.data.metaMensalRecebido is number
+        && (
+          (bootstrapPendente() && request.resource.data.papel == 'admin')
+          || (
+            exists(/databases/$(database)/documents/convites/$(emailDoToken()))
+            && request.resource.data.papel == get(/databases/$(database)/documents/convites/$(emailDoToken())).data.papel
+          )
+        );
+
+      // O próprio usuário só muda nome e foto. Admin muda tudo, menos o próprio papel/ativo.
+      allow update: if autenticado() && userId == uid()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome', 'fotoUrl', 'atualizadoEm'])
+        || ehAdmin()
+          && papelValido(request.resource.data.papel)
+          && faixaValida(request.resource.data.faixa)
+          && request.resource.data.metaMensalRecebido is number
+          && request.resource.data.email == resource.data.email
+          && (userId != uid() || (request.resource.data.papel == resource.data.papel && request.resource.data.ativo == true));
+
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------ convites
+    match /convites/{email} {
+      // O convidado lê o próprio convite ao entrar; admin lê todos.
+      allow read: if ehAdmin() || (autenticado() && email == emailDoToken());
+      allow create: if ehAdmin()
+        && request.resource.data.nome is string
+        && papelValido(request.resource.data.papel)
+        && request.resource.data.convidadoPor == uid();
+      allow update: if ehAdmin()
+        || (autenticado() && email == emailDoToken()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['aceitoEm', 'uid']));
+      allow delete: if ehAdmin();
+    }
+
+    // ------------------------------------------------------------ configuracoes
+    match /configuracoes/{docId} {
+      allow read: if autenticado();
+      // Bootstrap atômico do sistema junto com o primeiro usuário.
+      allow create: if ehAdmin()
+        || (autenticado() && bootstrapPendente()
+            && request.resource.data.keys().hasAny(['bootstrapConcluido', 'percentualVendedorRecebido', 'servicos', 'nomeApp']));
+      allow update: if ehAdmin() && docId != 'sistema';
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------ leads
+    match /leads/{leadId} {
+      function leadValido() {
+        return request.resource.data.nome is string && request.resource.data.nome.size() > 0
+          && request.resource.data.telefone is string && request.resource.data.telefone.size() >= 10
+          && request.resource.data.etapa in ['novo', 'contato_feito', 'qualificado', 'proposta_enviada', 'negociacao', 'ganho', 'perdido']
+          && request.resource.data.tipoPessoa in ['PF', 'PJ']
+          && request.resource.data.vendedorId is string
+          && (request.resource.data.etapa != 'perdido' || request.resource.data.motivoPerda is string);
+      }
+      allow read: if ehGestao() || (ehMembro() && donoDoRecurso());
+      allow create: if leadValido() && (ehGestao() || (ehMembro() && donoDoNovo()));
+      // Vendedor edita os próprios e não transfere. Gestão edita e reatribui.
+      allow update: if leadValido() && (ehGestao() || (ehMembro() && donoDoRecurso() && mantemVendedor()));
+      allow delete: if ehGestao() || (ehMembro() && donoDoRecurso());
+
+      match /interacoes/{interacaoId} {
+        function leadPai() {
+          return get(/databases/$(database)/documents/leads/$(leadId));
+        }
+        function donoDoLead() {
+          return leadPai().data.vendedorId == uid();
+        }
+        allow read: if ehGestao() || (ehMembro() && donoDoLead());
+        allow create: if (ehGestao() || (ehMembro() && donoDoLead()))
+          && request.resource.data.tipo in ['ligacao', 'whatsapp', 'email', 'reuniao', 'anotacao']
+          && request.resource.data.resultado in ['atendeu', 'nao_atendeu', 'caixa_postal', 'retorno_agendado', 'sem_interesse', 'n_a']
+          && isoData(request.resource.data.dataHora);
+        allow update, delete: if ehGestao() || (ehMembro() && donoDoLead());
+      }
+    }
+
+    // ------------------------------------------------------------ vendas
+    match /vendas/{vendaId} {
+      function vendaValida() {
+        return request.resource.data.clienteNome is string && request.resource.data.clienteNome.size() > 0
+          && request.resource.data.valorTotal is number && request.resource.data.valorTotal >= 0
+          && request.resource.data.entrada is number && request.resource.data.entrada >= 0
+          && request.resource.data.numParcelas is int && request.resource.data.numParcelas >= 0
+          && isoData(request.resource.data.dataFechamento)
+          && request.resource.data.status in ['ativa', 'cancelada']
+          && request.resource.data.vendedorId is string;
+      }
+      allow read: if ehGestao() || (ehMembro() && donoDoRecurso());
+      allow create: if vendaValida() && (ehGestao() || (ehMembro() && donoDoNovo()));
+      allow update: if vendaValida() && (ehGestao() || (ehMembro() && donoDoRecurso() && mantemVendedor()));
+      allow delete: if ehAdmin();
+    }
+
+    // ------------------------------------------------------------ parcelas
+    match /parcelas/{parcelaId} {
+      function parcelaValida() {
+        return request.resource.data.vendaId is string
+          && request.resource.data.numero is int && request.resource.data.numero >= 0
+          && request.resource.data.valor is number && request.resource.data.valor >= 0
+          && isoData(request.resource.data.vencimento)
+          && request.resource.data.status in ['previsto', 'recebido']
+          && (request.resource.data.status != 'recebido'
+              || (isoData(request.resource.data.dataRecebimento) && request.resource.data.valorRecebido is number))
+          && request.resource.data.vendedorId is string;
+      }
+      allow read: if ehGestao() || (ehMembro() && donoDoRecurso());
+      allow create: if parcelaValida() && (ehGestao() || (ehMembro() && donoDoNovo()));
+      allow update: if parcelaValida() && (ehGestao() || (ehMembro() && donoDoRecurso() && mantemVendedor()));
+      allow delete: if ehAdmin();
+    }
+
+    // ------------------------------------------------------------ metas
+    match /metas/{metaId} {
+      // id = vendedorId_AAAA-MM. Vendedor lê a própria; gestão lê e edita todas.
+      allow read: if ehGestao() || (ehMembro() && metaId.matches('^' + uid() + '_.*'));
+      allow create, update: if ehGestao()
+        && request.resource.data.metaRecebido is number
+        && request.resource.data.vendedorId is string
+        && metaId == request.resource.data.vendedorId + '_' + request.resource.data.mes;
+      allow delete: if ehAdmin();
+    }
+
+    // ------------------------------------------------------------ resumos (ranking)
+    match /resumos/{mes} {
+      // Cada vendedor publica apenas o próprio campo; todos leem.
+      allow read: if ehMembro();
+      allow create: if ehMembro() && request.resource.data.keys().hasOnly([uid()]);
+      allow update: if ehMembro() && request.resource.data.diff(resource.data).affectedKeys().hasOnly([uid()]);
+      allow delete: if ehAdmin();
+    }
+
+    // ------------------------------------------------------------ briefings
+    match /briefings/{briefingId} {
+      // id = vendedorId_AAAA-MM-DD
+      allow read, write: if ehMembro()
+        && briefingId.matches('^' + uid() + '_.*')
+        && (request.method == 'delete' || request.resource.data.vendedorId == uid());
+    }
+
+    // ------------------------------------------------------------ padrão
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,235 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------ */
+/* Tokens de design do Cockpit PA                                      */
+/* Fundo preto profundo, prata e platina como marca, um único acento   */
+/* luminoso (azul elétrico para violeta), verde discreto para recebido,*/
+/* âmbar para atrasado, vermelho só para erro.                          */
+/* ------------------------------------------------------------------ */
+@theme {
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --color-fundo-0: #050507;
+  --color-fundo-1: #0b0b0f;
+  --color-fundo-2: #121217;
+  --color-grafite: #1a1a21;
+
+  --color-platina: #f2f2f5;
+  --color-prata: #c9cad1;
+  --color-prata-2: #9a9aa3;
+  --color-prata-3: #6b6b75;
+  --color-prata-4: #3d3d47;
+
+  --color-acento: #5b7cff;
+  --color-acento-2: #8a5cf6;
+  --color-recebido: #3fb68b;
+  --color-atrasado: #e3a54a;
+  --color-erro: #e5484d;
+
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+
+  --ease-fluida: cubic-bezier(0.22, 1, 0.36, 1);
+  --shadow-brilho: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 24px 80px -30px rgba(91, 124, 255, 0.35);
+}
+
+:root {
+  color-scheme: dark;
+  --borda: rgba(255, 255, 255, 0.08);
+  --borda-forte: rgba(255, 255, 255, 0.14);
+  --vidro: rgba(255, 255, 255, 0.035);
+  --vidro-2: rgba(255, 255, 255, 0.06);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(1200px 600px at 50% -10%, rgba(91, 124, 255, 0.08), transparent 60%),
+    linear-gradient(180deg, #050507 0%, #0b0b0f 55%, #101015 100%);
+  background-attachment: fixed;
+  color: var(--color-platina);
+  font-family: var(--font-sans);
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Grade fina e granulado ao fundo, sem pesar. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at 50% 0%, black 20%, transparent 75%);
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+* {
+  border-color: var(--borda);
+}
+
+::selection {
+  background: rgba(91, 124, 255, 0.35);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Superfície de vidro. Profundidade por luz, não por sombra cinza. */
+.vidro {
+  background: var(--vidro);
+  border: 1px solid var(--borda);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.vidro-2 {
+  background: var(--vidro-2);
+  border: 1px solid var(--borda-forte);
+  backdrop-filter: blur(22px) saturate(1.25);
+  -webkit-backdrop-filter: blur(22px) saturate(1.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Brilho radial que segue o cursor (variáveis definidas via JS). */
+.brilho-cursor {
+  position: relative;
+  overflow: hidden;
+}
+.brilho-cursor::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 320ms var(--ease-fluida);
+  background: radial-gradient(
+    380px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.07),
+    transparent 45%
+  );
+}
+.brilho-cursor:hover::before {
+  opacity: 1;
+}
+
+.texto-acento {
+  background: linear-gradient(92deg, #7f9bff 0%, #a98bff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.texto-prata {
+  background: linear-gradient(180deg, #f4f4f7 0%, #b9bac3 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Esqueleto com brilho deslizante. */
+.esqueleto {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-xs);
+}
+.esqueleto::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  animation: brilho-deslizante 1.6s var(--ease-fluida) infinite;
+}
+@keyframes brilho-deslizante {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.foco:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(127, 155, 255, 0.85);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  color-scheme: dark;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-prata-3);
+}
+
+/* Barra de rolagem discreta */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.sem-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.sem-scrollbar {
+  scrollbar-width: none;
+}
+
+.area-segura-inferior {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
