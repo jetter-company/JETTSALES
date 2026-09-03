@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="prata" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F4F4F7"/>
+      <stop offset="0.5" stop-color="#C9CAD1"/>
+      <stop offset="1" stop-color="#8E8F99"/>
+    </linearGradient>
+    <radialGradient id="brilho" cx="0.5" cy="0.35" r="0.6">
+      <stop offset="0" stop-color="#5B7CFF" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#050507" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#050507"/>
+  <rect width="512" height="512" rx="112" fill="url(#brilho)"/>
+  <rect x="24" y="24" width="464" height="464" rx="96" fill="none" stroke="url(#prata)" stroke-opacity="0.35" stroke-width="2"/>
+  <text x="256" y="322" text-anchor="middle" font-family="Manrope, Inter, system-ui, sans-serif" font-weight="700" font-size="220" letter-spacing="-12" fill="url(#prata)">PA</text>
+</svg>
